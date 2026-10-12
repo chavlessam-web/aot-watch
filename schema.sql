@@ -11,6 +11,10 @@ create table if not exists public.watch_log (
 -- so anyone with the link can read and tick/untick. Fine for a friends group.
 alter table public.watch_log enable row level security;
 
+-- Make sure the website's key can reach the table (needed if
+-- "Automatically expose new tables" was unticked when the project was created)
+grant select, insert, delete on public.watch_log to anon;
+
 create policy "anyone can read"   on public.watch_log for select to anon using (true);
 create policy "anyone can tick"   on public.watch_log for insert to anon with check (true);
 create policy "anyone can untick" on public.watch_log for delete to anon using (true);
