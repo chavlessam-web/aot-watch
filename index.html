@@ -1,0 +1,575 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Attack on Titan Watch Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  /* ---------- tokens ---------- */
+  :root {
+    --bg: #f3efe6;
+    --surface: #fbf8f2;
+    --surface-2: #ebe5d8;
+    --ink: #1f1c17;
+    --ink-2: #5d564b;
+    --ink-3: #8b8274;
+    --line: #d9d1c1;
+    --accent: #a3271f;          /* in-person */
+    --accent-soft: #f2dcd6;
+    --solo: #3d5a45;
+    --solo-soft: #dbe5dc;
+    --skip: #8a5a00;
+    --skip-soft: #f4e6c4;
+    --credits: #3b4a7a;
+    --credits-soft: #dde2f2;
+    --check: #1f1c17;
+    --check-ink: #fbf8f2;
+    --gold: #c9971c;
+    --gold-ink: #1f1c17;
+    --gold-soft: #f6e7bf;
+    --gold-text: #7a5800;
+    --shadow: 0 1px 0 rgba(0,0,0,.04), 0 6px 20px -12px rgba(0,0,0,.25);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #141311;
+      --surface: #1c1a17;
+      --surface-2: #26231f;
+      --ink: #ece6da;
+      --ink-2: #b5ad9f;
+      --ink-3: #847c6f;
+      --line: #322e28;
+      --accent: #e0584b;
+      --accent-soft: #3a1e1a;
+      --solo: #8fb79a;
+      --solo-soft: #1f2b22;
+      --skip: #e2b04a;
+      --skip-soft: #33290f;
+      --credits: #9fb0e6;
+      --credits-soft: #1f2436;
+      --check: #ece6da;
+      --check-ink: #141311;
+      --gold: #e3b341;
+      --gold-ink: #141311;
+      --gold-soft: #3a2f12;
+      --gold-text: #e9c46a;
+      --shadow: 0 1px 0 rgba(255,255,255,.02), 0 8px 24px -14px rgba(0,0,0,.8);
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; scroll-padding-top: 76px; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 400 15px/1.45 "Barlow", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 0 16px 80px; }
+
+  /* ---------- header ---------- */
+  header.top { padding: 40px 0 20px; }
+  .eyebrow {
+    font: 600 12px/1 "Barlow Condensed", sans-serif;
+    letter-spacing: .18em; text-transform: uppercase; color: var(--accent);
+  }
+  h1 {
+    font: 700 clamp(34px, 6vw, 54px)/.95 "Barlow Condensed", sans-serif;
+    letter-spacing: .01em; text-transform: uppercase;
+    margin: 10px 0 12px;
+  }
+  .sub { color: var(--ink-2); max-width: 60ch; margin: 0; }
+
+  .banner {
+    margin-top: 16px; padding: 10px 14px; border-radius: 8px;
+    background: var(--skip-soft); color: var(--ink); font-size: 14px;
+    border: 1px solid color-mix(in srgb, var(--skip) 35%, transparent);
+  }
+  .banner[hidden] { display: none; }
+
+  /* season nav */
+  nav.seasons {
+    position: sticky; top: 0; z-index: 5;
+    background: color-mix(in srgb, var(--bg) 88%, transparent);
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--line);
+    margin: 24px -16px 0; padding: 10px 16px;
+    display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+  }
+  nav.seasons a {
+    font: 600 14px/1 "Barlow Condensed", sans-serif; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--ink); text-decoration: none;
+    padding: 8px 12px; border-radius: 99px; border: 1px solid var(--line); background: var(--surface);
+  }
+  nav.seasons a:hover { border-color: var(--ink-3); }
+  .legend { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; }
+  @media (max-width: 640px) { .legend { display: none; } }
+
+  /* ---------- tags ---------- */
+  .tag {
+    display: inline-flex; align-items: center; gap: 5px;
+    font: 600 12px/1 "Barlow Condensed", sans-serif; letter-spacing: .06em; text-transform: uppercase;
+    padding: 5px 8px; border-radius: 5px; white-space: nowrap;
+  }
+  .tag.solo { background: var(--solo-soft); color: var(--solo); }
+  .tag.person { background: var(--accent-soft); color: var(--accent); }
+  .tag.skip { background: var(--skip-soft); color: var(--skip); }
+  .tag.credits { background: var(--credits-soft); color: var(--credits); }
+  .tag svg { width: 12px; height: 12px; flex: none; }
+
+  /* ---------- seasons ---------- */
+  section.season { margin-top: 40px; }
+  .s-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 12px; }
+  .s-head h2 {
+    font: 700 30px/1 "Barlow Condensed", sans-serif; text-transform: uppercase; letter-spacing: .02em; margin: 0;
+  }
+  .s-head { align-items: center; flex-wrap: wrap; }
+  .s-avg {
+    display: inline-flex; align-items: center; gap: 10px;
+    padding: 5px 12px 5px 5px; border-radius: 8px;
+    border: 1px solid var(--gold); background: var(--gold-soft);
+  }
+  .s-count { color: var(--ink-3); font-size: 14px; }
+
+  .list { display: flex; flex-direction: column; gap: 6px; }
+
+  /* episode row */
+  .ep {
+    display: grid;
+    grid-template-columns: 64px 54px 1fr auto;
+    align-items: center; gap: 12px;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 8px;
+    padding: 10px 12px;
+  }
+  .ep.done { background: color-mix(in srgb, var(--surface) 60%, var(--bg)); }
+  .ep.done .code { color: var(--ink-3); }
+  .code { font: 700 20px/1 "Barlow Condensed", sans-serif; letter-spacing: .02em; font-variant-numeric: tabular-nums; }
+  .code small { font-size: 13px; color: var(--ink-3); font-weight: 600; margin-right: 1px; }
+  .rating {
+    font: 600 14px/1 "Barlow", sans-serif; font-variant-numeric: tabular-nums;
+    display: inline-flex; align-items: center; gap: 4px; color: var(--ink-2);
+  }
+  .rating svg { width: 12px; height: 12px; color: var(--skip); }
+  .rating.top { color: var(--ink); font-weight: 700; }
+  .info { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; min-width: 0; }
+  .skip-detail { font-size: 13px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+  .skip-detail b { color: var(--ink); font-weight: 600; }
+
+  .checks { display: flex; gap: 5px; }
+  .chk { position: relative; }
+  .chk input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+  .chk span {
+    display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+    min-width: 58px; height: 32px; padding: 0 8px;
+    border: 1.5px solid var(--line); border-radius: 6px;
+    font: 600 13px/1 "Barlow Condensed", sans-serif; letter-spacing: .05em; text-transform: uppercase;
+    color: var(--ink-2); background: transparent; user-select: none;
+    transition: background .12s, color .12s, border-color .12s;
+  }
+  .chk span svg { width: 12px; height: 12px; display: none; }
+  .chk input:hover + span { border-color: var(--ink-3); }
+  .chk input:checked + span { background: var(--check); color: var(--check-ink); border-color: var(--check); }
+  .chk input:checked + span svg { display: block; }
+  .chk input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .chk input:disabled { cursor: progress; }
+
+  @media (max-width: 760px) {
+    .ep { grid-template-columns: auto auto 1fr; row-gap: 10px; }
+    .ep .info { grid-column: 1 / -1; order: 3; }
+    .ep .checks { grid-column: 1 / -1; order: 4; }
+    .ep .rating { justify-self: start; }
+    .checks { display: grid; grid-template-columns: repeat(4, 1fr); }
+    .chk span { min-width: 0; width: 100%; }
+  }
+
+  /* ---------- in-person session ---------- */
+  .session {
+    border: 1.5px solid var(--accent); border-radius: 12px;
+    background: color-mix(in srgb, var(--accent-soft) 45%, transparent);
+    padding: 14px; margin: 6px 0;
+  }
+  .session .list { gap: 6px; }
+  .sess-head { display: grid; grid-template-columns: 1fr auto; gap: 10px 16px; align-items: start; margin-bottom: 12px; }
+  .sess-title {
+    font: 700 13px/1 "Barlow Condensed", sans-serif; letter-spacing: .16em; text-transform: uppercase; color: var(--accent);
+  }
+  .sess-range { font: 700 22px/1.05 "Barlow Condensed", sans-serif; text-transform: uppercase; margin-top: 6px; }
+  .sess-tagline {
+    display: inline-block; margin-top: 8px; padding: 6px 10px; border-radius: 6px;
+    background: var(--accent); color: #fff;
+    font: 700 16px/1.1 "Barlow Condensed", sans-serif; letter-spacing: .06em; text-transform: uppercase;
+  }
+  .sess-meta { color: var(--ink-2); font-size: 13px; margin-top: 4px; }
+  .sess-time { text-align: right; }
+  .sess-dur { font: 700 34px/1 "Barlow Condensed", sans-serif; font-variant-numeric: tabular-nums; }
+  .sess-dur-label { font-size: 12px; color: var(--ink-3); text-transform: uppercase; letter-spacing: .1em; }
+
+  .timeline { grid-column: 1 / -1; display: flex; gap: 2px; height: 22px; }
+  .timeline i {
+    display: flex; align-items: center; justify-content: center;
+    background: var(--accent); color: #fff; border-radius: 3px;
+    font: 600 11px/1 "Barlow Condensed", sans-serif; letter-spacing: .04em; font-style: normal;
+    min-width: 0; overflow: hidden; white-space: nowrap;
+  }
+  .timeline i.watched { background: color-mix(in srgb, var(--accent) 35%, var(--surface)); color: var(--ink); }
+
+  .planner {
+    grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px;
+    font-size: 14px; color: var(--ink-2);
+  }
+  .planner input[type=time] {
+    font: 500 14px "Barlow", sans-serif; color: var(--ink); background: var(--surface);
+    border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px;
+  }
+  .planner b { color: var(--ink); font-variant-numeric: tabular-nums; }
+  @media (max-width: 520px) {
+    .sess-head { grid-template-columns: 1fr; }
+    .sess-time { text-align: left; }
+  }
+
+  /* ---------- top 100 ---------- */
+  .ep.ranked {
+    border-color: var(--gold);
+    box-shadow: inset 4px 0 0 var(--gold);
+    background: linear-gradient(90deg, var(--gold-soft), var(--surface) 55%);
+  }
+  .ep.ranked.done { background: linear-gradient(90deg, var(--gold-soft), color-mix(in srgb, var(--surface) 60%, var(--bg)) 55%); }
+  .top100 {
+    flex-basis: 100%;
+    display: inline-flex; align-items: center; gap: 10px;
+  }
+  .top100-rank {
+    font: 700 22px/1 "Barlow Condensed", sans-serif; font-variant-numeric: tabular-nums;
+    color: var(--gold-ink); background: var(--gold); padding: 5px 9px 4px; border-radius: 6px;
+  }
+  .top100-rank small { font-size: 13px; opacity: .75; margin-left: 1px; }
+  .top100-label {
+    font: 600 13px/1.1 "Barlow Condensed", sans-serif; letter-spacing: .12em; text-transform: uppercase; color: var(--gold-text);
+  }
+  .tag.gold { background: var(--gold); color: var(--gold-ink); }
+
+  footer { margin-top: 48px; color: var(--ink-3); font-size: 13px; }
+  .sync { display: inline-flex; align-items: center; gap: 6px; }
+  .sync::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--ink-3); }
+  .sync.live::before { background: #3aa65a; }
+  .sync.err::before { background: var(--accent); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="eyebrow">Group watch · 89 episodes</div>
+    <h1>Attack on Titan</h1>
+    <p class="sub">Tick each episode once you've seen it. Red blocks are in-person days — watch those together, everything else on your own.</p>
+    <div class="banner" id="demoBanner" hidden>Demo mode: Supabase isn't configured yet, so ticks are only saved in this browser.</div>  </header>
+
+  <nav class="seasons" aria-label="Seasons">
+    <a href="#s1">S1</a><a href="#s2">S2</a><a href="#s3">S3</a><a href="#s4">S4</a>
+    <div class="legend">
+      <span class="tag solo">Solo</span>
+      <span class="tag person">In person</span>
+      <span class="tag skip">Skip intro</span>
+      <span class="tag credits">Watch credits</span>
+      <span class="tag gold">Top 100</span>
+    </div>
+  </nav>
+
+  <main id="seasons"></main>
+
+  <footer>
+    <span class="sync" id="sync">Connecting…</span>
+    · Ratings from IMDb, October 2026.
+  </footer>
+</div>
+
+<script>
+/* =========================================================
+   CONFIG — paste your Supabase project URL + anon key here.
+   Leave blank to run in demo mode (localStorage only).
+   ========================================================= */
+const SUPABASE_URL = "https://rcqcmrrjmnqbklfqvbyn.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_rNkrNBTgMcMnsbEvXy0rOg_PnplMhBc";
+
+/* ---------- data ---------- */
+const VIEWERS = ["Nancy", "Skip", "Gavin", "BP"];
+const EP_MINUTES = 24;
+
+// IMDb ratings, indexed by episode (pulled Oct 2026)
+const RATINGS = {
+  1: [9.2,8.5,8.1,8.6,9.3,8.9,8.9,9.2,8.8,8.3,8.3,8.3,9.0,8.5,8.1,8.2,9.1,8.9,8.9,9.1,9.6,9.1,9.0,9.2,9.4],
+  2: [9.2,8.5,8.6,9.1,9.1,9.8,9.6,8.4,8.6,9.0,9.6,9.7],
+  3: [8.8,9.2,8.7,8.5,9.0,9.2,9.5,8.9,9.3,9.2,9.1,8.9,9.6,9.6,9.6,9.8,9.8,9.8,9.2,9.8,9.7,9.5],
+  4: [9.2,8.6,9.2,8.9,9.8,9.8,9.8,9.5,8.9,8.5,8.8,8.9,9.5,9.7,9.5,9.4,9.1,9.3,9.7,9.8,9.8,9.0,8.5,8.5,8.6,9.2,9.5,9.6,9.5,9.0],
+};
+
+// In-person sessions (inclusive ranges)
+const SESSIONS = [
+  { season: 2, from: 4,  to: 7 },
+  { season: 3, from: 13, to: 22, tagline: "The most goated 4 hours of your life" },
+  { season: 4, from: 17, to: 21 },
+  { season: 4, from: 29, to: 30, note: "The Final Chapters (two feature-length specials)" },
+];
+
+// Episodes that aren't the standard 24 min
+const RUNTIME_OVERRIDE = { "S4E29": 75, "S4E30": 75 }; // 2h30m across both
+
+// Skip intro: `at` = when the intro starts (0 = right at the top), `to` = where to jump
+const SKIPS = {
+  "S3E13": { at: 114, to: 208 },
+  "S3E14": { at: 0,   to: 112 },
+  "S3E15": { at: 0,   to: 109 },
+  "S3E16": { at: 144, to: 236 },
+  "S3E17": { at: 56,  to: 150 },
+  "S4E17": { at: 232, to: 330 },
+  "S4E18": { at: 423, to: 516 },
+  "S4E19": { at: 0,   to: 111 },
+  "S4E20": { at: 348, to: 445 },
+  "S4E21": { at: 347, to: 441 },
+};
+
+const CREDITS_EPISODE = "S4E30";
+
+// Rank on IMDb's "TOP 100 Best Rated Episodes Of All Time" list (imdb.com/list/ls561057724)
+const TOP100 = {
+  "S3E17": 4,  "S3E16": 5,  "S4E21": 9,  "S4E20": 10, "S4E7": 12, "S3E18": 21,
+  "S2E6": 31,  "S4E19": 52, "S4E6": 58,  "S4E5": 59,  "S3E20": 70, "S2E12": 90,
+};
+
+/* ---------- helpers ---------- */
+const code = (s, e) => `S${s}E${e}`;
+const runtime = c => RUNTIME_OVERRIDE[c] ?? EP_MINUTES;
+const fmtTC = sec => { const m = Math.floor(sec / 60), s = sec % 60; return `${m}:${String(s).padStart(2, "0")}`; };
+const fmtDur = min => { const h = Math.floor(min / 60), m = Math.round(min % 60); return h ? `${h}h ${String(m).padStart(2,"0")}m` : `${m}m`; };
+const sessionOf = (s, e) => SESSIONS.findIndex(x => x.season === s && e >= x.from && e <= x.to);
+const ALL = Object.entries(RATINGS).flatMap(([s, arr]) => arr.map((r, i) => ({ s: +s, e: i + 1, code: code(+s, i + 1), rating: r })));
+
+const ICON = {
+  check: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5l3.2 3L13 4.5"/></svg>',
+  star: '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 1.2l2 4.3 4.7.5-3.5 3.2 1 4.6L8 11.4 3.8 13.8l1-4.6L1.3 6l4.7-.5z"/></svg>',
+  people: '<svg viewBox="0 0 16 16" fill="currentColor"><circle cx="5.5" cy="5" r="2.3"/><circle cx="11" cy="5.5" r="2"/><path d="M1 13.5c0-2.5 2-4 4.5-4s4.5 1.5 4.5 4z"/><path d="M10.5 13.5c0-1.5-.5-2.7-1.4-3.5.6-.3 1.2-.5 1.9-.5 2.1 0 4 1.3 4 4z"/></svg>',
+  skip: '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M2 3l6 5-6 5zM8 3l6 5-6 5z"/></svg>',
+  credits: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 4h10M5 7.5h6M4 11h8"/></svg>',
+};
+
+/* ---------- state ---------- */
+const watched = new Set(); // keys "S1E1|Nancy"
+const key = (c, v) => `${c}|${v}`;
+
+/* ---------- storage layer ---------- */
+const hasSupabase = SUPABASE_URL && SUPABASE_ANON_KEY && window.supabase;
+const db = hasSupabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+const LS_KEY = "aot-watch-v1";
+
+async function loadAll() {
+  if (!db) {
+    try { JSON.parse(localStorage.getItem(LS_KEY) || "[]").forEach(k => watched.add(k)); } catch {}
+    return;
+  }
+  const { data, error } = await db.from("watch_log").select("episode_code, viewer");
+  if (error) throw error;
+  data.forEach(r => watched.add(key(r.episode_code, r.viewer)));
+}
+
+async function save(c, v, on) {
+  if (!db) {
+    try { localStorage.setItem(LS_KEY, JSON.stringify([...watched])); } catch {}
+    return;
+  }
+  const q = on
+    ? db.from("watch_log").upsert({ episode_code: c, viewer: v }, { onConflict: "episode_code,viewer", ignoreDuplicates: true })
+    : db.from("watch_log").delete().eq("episode_code", c).eq("viewer", v);
+  const { error } = await q;
+  if (error) throw error;
+}
+
+function subscribe() {
+  if (!db) return;
+  db.channel("watch_log")
+    .on("postgres_changes", { event: "*", schema: "public", table: "watch_log" }, p => {
+      if (p.eventType === "INSERT") watched.add(key(p.new.episode_code, p.new.viewer));
+      if (p.eventType === "DELETE") watched.delete(key(p.old.episode_code, p.old.viewer));
+      refresh();
+    })
+    .subscribe(status => {
+      if (status === "SUBSCRIBED") setSync("Live — everyone's ticks sync instantly", "live");
+    });
+}
+
+function setSync(text, cls) {
+  const el = document.getElementById("sync");
+  el.textContent = text; el.className = "sync " + (cls || "");
+}
+
+/* ---------- render ---------- */
+function episodeRow(ep) {
+  const sk = SKIPS[ep.code];
+  const inPerson = sessionOf(ep.s, ep.e) !== -1;
+  const tags = [];
+  tags.push(inPerson
+    ? `<span class="tag person">${ICON.people}In person</span>`
+    : `<span class="tag solo">Solo</span>`);
+  if (sk) {
+    tags.push(`<span class="tag skip">${ICON.skip}Skip intro</span>`);
+    tags.push(sk.at === 0
+      ? `<span class="skip-detail">Starts immediately → jump to <b>${fmtTC(sk.to)}</b></span>`
+      : `<span class="skip-detail">At <b>${fmtTC(sk.at)}</b> → jump to <b>${fmtTC(sk.to)}</b></span>`);
+  }
+  if (ep.code === CREDITS_EPISODE) tags.push(`<span class="tag credits">${ICON.credits}Stay through the credits</span>`);
+  if (RUNTIME_OVERRIDE[ep.code]) tags.push(`<span class="skip-detail">Feature-length</span>`);
+
+  const checks = VIEWERS.map(v => `
+    <label class="chk">
+      <input type="checkbox" data-code="${ep.code}" data-viewer="${v}" aria-label="${v} watched ${ep.code}">
+      <span>${ICON.check}${v}</span>
+    </label>`).join("");
+
+  const rank = TOP100[ep.code];
+  const badge = rank ? `
+      <div class="top100" title="Ranked #${rank} on IMDb's top 100 best-rated TV episodes of all time">
+        <span class="top100-rank">#${rank}<small>/100</small></span>
+        <span class="top100-label">Top IMDb Rated TV Episodes</span>
+      </div>` : "";
+
+  return `
+    <div class="ep${rank ? " ranked" : ""}" id="ep-${ep.code}">
+      <div class="code"><small>S${ep.s}</small>E${ep.e}</div>
+      <div class="rating${ep.rating >= 9.5 ? " top" : ""}" title="IMDb rating">${ICON.star}${ep.rating.toFixed(1)}</div>
+      <div class="info">${badge}${tags.join("")}</div>
+      <div class="checks">${checks}</div>
+    </div>`;
+}
+
+function sessionBlock(idx, eps) {
+  const s = SESSIONS[idx];
+  const total = eps.reduce((t, ep) => t + runtime(ep.code), 0);
+  const skipSec = eps.reduce((t, ep) => { const k = SKIPS[ep.code]; return t + (k ? k.to - k.at : 0); }, 0);
+  const net = total - skipSec / 60;
+  const seg = eps.map(ep => `<i data-seg="${ep.code}" style="flex:${runtime(ep.code)}" title="${ep.code} · ${fmtDur(runtime(ep.code))}">E${ep.e}</i>`).join("");
+  return `
+    <div class="session" data-session="${idx}">
+      <div class="sess-head">
+        <div>
+          <div class="sess-title">In-person session ${idx + 1}</div>
+          <div class="sess-range">S${s.season} · E${s.from}–E${s.to}</div>
+          ${s.tagline ? `<div class="sess-tagline">${s.tagline}</div>` : ""}
+          <div class="sess-meta">${s.note ? s.note : `${eps.length} episodes × ${EP_MINUTES} min`}${skipSec ? ` · ≈${fmtDur(net)} with intros skipped` : ""}</div>
+        </div>
+        <div class="sess-time">
+          <div class="sess-dur">${fmtDur(total)}</div>
+          <div class="sess-dur-label">Watch time</div>
+        </div>
+        <div class="timeline" aria-hidden="true">${seg}</div>
+        <div class="planner">
+          <label for="start-${idx}">Start at</label>
+          <input type="time" id="start-${idx}" value="19:00" data-minutes="${total}">
+          <span>→ done around <b data-end="${idx}"></b></span>
+        </div>
+      </div>
+      <div class="list">${eps.map(episodeRow).join("")}</div>
+    </div>`;
+}
+
+function render() {
+  const out = [];
+  for (const s of [1, 2, 3, 4]) {
+    const eps = ALL.filter(x => x.s === s);
+    const parts = [];
+    let i = 0;
+    while (i < eps.length) {
+      const si = sessionOf(s, eps[i].e);
+      if (si !== -1) {
+        const group = [];
+        while (i < eps.length && sessionOf(s, eps[i].e) === si) group.push(eps[i++]);
+        parts.push(sessionBlock(si, group));
+      } else {
+        parts.push(episodeRow(eps[i++]));
+      }
+    }
+    const avg = (eps.reduce((t, x) => t + x.rating, 0) / eps.length).toFixed(1);
+    out.push(`
+      <section class="season" id="s${s}">
+        <div class="s-head">
+          <h2>Season ${s}</h2>
+          <div class="s-avg" title="Average IMDb rating across Season ${s}">
+            <span class="top100-rank">${avg}<small>/10</small></span>
+            <span class="top100-label">Avg IMDb rating</span>
+          </div>
+          <span class="s-count">${eps.length} episodes</span>
+        </div>
+        <div class="list">${parts.join("")}</div>
+      </section>`);
+  }
+  document.getElementById("seasons").innerHTML = out.join("");
+
+  document.querySelectorAll(".planner input[type=time]").forEach(inp => {
+    try { const saved = localStorage.getItem("aot-start-" + inp.id); if (saved) inp.value = saved; } catch {}
+    inp.addEventListener("input", () => { try { localStorage.setItem("aot-start-" + inp.id, inp.value); } catch {} updateEnd(inp); });
+    updateEnd(inp);
+  });
+}
+
+function updateEnd(inp) {
+  const out = document.querySelector(`[data-end="${inp.id.split("-")[1]}"]`);
+  if (!inp.value) { out.textContent = "—"; return; }
+  const [h, m] = inp.value.split(":").map(Number);
+  const end = new Date(2000, 0, 1, h, m + Number(inp.dataset.minutes));
+  out.textContent = end.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
+
+function refresh() {
+  document.querySelectorAll(".chk input").forEach(inp => {
+    inp.checked = watched.has(key(inp.dataset.code, inp.dataset.viewer));
+  });
+  ALL.forEach(ep => {
+    const all = VIEWERS.every(v => watched.has(key(ep.code, v)));
+    document.getElementById("ep-" + ep.code).classList.toggle("done", all);
+    const seg = document.querySelector(`[data-seg="${ep.code}"]`);
+    if (seg) seg.classList.toggle("watched", all);
+  });
+}
+
+document.addEventListener("change", async e => {
+  const inp = e.target.closest(".chk input");
+  if (!inp) return;
+  const { code: c, viewer: v } = inp.dataset;
+  const on = inp.checked;
+  on ? watched.add(key(c, v)) : watched.delete(key(c, v));
+  refresh();
+  inp.disabled = true;
+  try {
+    await save(c, v, on);
+  } catch (err) {
+    console.error(err);
+    on ? watched.delete(key(c, v)) : watched.add(key(c, v)); // roll back
+    refresh();
+    setSync("Couldn't save that tick — check your connection", "err");
+  } finally {
+    inp.disabled = false;
+  }
+});
+
+/* ---------- boot ---------- */
+render();
+(async () => {
+  if (!db) {
+    document.getElementById("demoBanner").hidden = false;
+    setSync("Demo mode — saved in this browser only");
+  }
+  try {
+    await loadAll();
+    if (db) setSync("Connected", "live");
+  } catch (err) {
+    console.error(err);
+    setSync("Couldn't load ticks from Supabase", "err");
+  }
+  refresh();
+  subscribe();
+})();
+</script>
+</body>
+</html>
