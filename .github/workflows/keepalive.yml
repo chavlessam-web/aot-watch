@@ -1,0 +1,21 @@
+name: Supabase Keep-Alive
+
+# Reads one row from watch_log twice a week so the free-tier
+# Supabase project never hits the 7-day inactivity pause.
+
+on:
+  schedule:
+    - cron: '0 12 * * 0,3'   # Sundays and Wednesdays, 12:00 UTC
+  workflow_dispatch:          # adds a "Run workflow" button in the Actions tab
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase
+        run: |
+          status=$(curl -s -o /dev/null -w "%{http_code}" \
+            "https://rcqcmrrjmnqbklfqvbyn.supabase.co/rest/v1/watch_log?select=episode_code&limit=1" \
+            -H "apikey: sb_publishable_rNkrNBTgMcMnsbEvXy0rOg_PnplMhBc")
+          echo "Supabase responded with HTTP $status"
+          if [ "$status" != "200" ]; then exit 1; fi
