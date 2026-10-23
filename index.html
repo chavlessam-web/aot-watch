@@ -72,7 +72,7 @@
   }
 
   * { box-sizing: border-box; }
-  html { scroll-behavior: smooth; scroll-padding-top: 76px; }
+  html { scroll-behavior: smooth; scroll-padding-top: calc(var(--dl-h, 0px) + 76px); }
   body {
     margin: 0;
     background: var(--bg);
@@ -96,8 +96,12 @@
   .sub { color: var(--ink-2); max-width: 60ch; margin: 0; }
 
   /* ---------- deadline banner ---------- */
-  .deadline {
-    margin-top: 16px; border-radius: 12px; padding: 14px 18px;
+  .dl-sticky {
+    position: sticky; top: 0; z-index: 6;
+    background: var(--bg);
+    margin: 0 -16px; padding: 10px 16px 0;
+  }
+  .deadline { border-radius: 12px; padding: 14px 18px;
     background: var(--dl-bg); border: 1px solid var(--dl-line); box-shadow: var(--shadow);
     color: #fff;
     display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px 24px;
@@ -154,7 +158,7 @@
 
   /* season nav */
   nav.seasons {
-    position: sticky; top: 0; z-index: 5;
+    position: sticky; top: var(--dl-h, 0px); z-index: 5;
     background: color-mix(in srgb, var(--bg) 88%, transparent);
     backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
     border-bottom: 1px solid var(--line);
@@ -322,7 +326,7 @@
 </head>
 <body>
 <div class="wrap">
-  <section class="deadline" id="deadline" aria-live="polite"></section>
+  <div class="dl-sticky" id="dlSticky"><section class="deadline" id="deadline"></section></div>
   <header class="top">
     <div class="eyebrow">Group watch · 89 episodes</div>
     <h1>Attack on Titan</h1>
@@ -702,6 +706,12 @@ function tickDeadline() {
     <div class="dl-clock" role="timer" aria-label="Time remaining">${unit(D, "Days")}${unit(H, "Hrs")}${unit(M, "Min")}${unit(S, "Sec")}</div>`;
   return true;
 }
+
+// Keep the season bar docked just under the pinned countdown, whatever its height
+const dlSticky = document.getElementById("dlSticky");
+const setDlHeight = () => document.documentElement.style.setProperty("--dl-h", dlSticky.offsetHeight + "px");
+if (window.ResizeObserver) new ResizeObserver(setDlHeight).observe(dlSticky);
+window.addEventListener("resize", setDlHeight);
 
 render();
 if (tickDeadline()) {
