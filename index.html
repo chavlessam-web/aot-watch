@@ -32,6 +32,11 @@
     --gold-ink: #1f1c17;
     --gold-soft: #f6e7bf;
     --gold-text: #7a5800;
+    --dl-bg: #1f1c17;
+    --dl-line: #1f1c17;
+    --dl-red: #ff4a3d;
+    --due2: #f08a24;
+    --due3: #f2d03b;
     --shadow: 0 1px 0 rgba(0,0,0,.04), 0 6px 20px -12px rgba(0,0,0,.25);
   }
   @media (prefers-color-scheme: dark) {
@@ -57,6 +62,11 @@
       --gold-ink: #141311;
       --gold-soft: #3a2f12;
       --gold-text: #e9c46a;
+      --dl-bg: #2a2621;
+      --dl-line: #3a352e;
+      --dl-red: #ff5a4d;
+      --due2: #f59a3a;
+      --due3: #f0d24a;
       --shadow: 0 1px 0 rgba(255,255,255,.02), 0 8px 24px -14px rgba(0,0,0,.8);
     }
   }
@@ -84,6 +94,56 @@
     margin: 10px 0 12px;
   }
   .sub { color: var(--ink-2); max-width: 60ch; margin: 0; }
+
+  /* ---------- deadline banner ---------- */
+  .deadline {
+    margin-top: 16px; border-radius: 12px; padding: 14px 18px;
+    background: var(--dl-bg); border: 1px solid var(--dl-line); box-shadow: var(--shadow);
+    color: #fff;
+    display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px 24px;
+  }
+  .dl-target {
+    font: 700 clamp(24px, 4.5vw, 34px)/1 "Barlow Condensed", sans-serif;
+    letter-spacing: .02em; text-transform: uppercase;
+  }
+  .dl-clock { display: flex; gap: 14px; color: var(--dl-red); }
+  .dl-unit { text-align: center; min-width: 52px; }
+  .dl-num { font: 700 clamp(34px, 6vw, 46px)/1 "Barlow Condensed", sans-serif; font-variant-numeric: tabular-nums; }
+  .dl-lbl { font: 600 11px/1 "Barlow Condensed", sans-serif; letter-spacing: .14em; text-transform: uppercase; margin-top: 4px; opacity: .75; }
+  .deadline.plan .dl-target { color: var(--dl-red); }
+  @media (max-width: 520px) {
+    .dl-clock { width: 100%; justify-content: space-between; }
+  }
+
+  /* deadline legs on episode rows */
+  .dl-flag {
+    margin-inline: auto;
+    font: 700 18px/1 "Barlow Condensed", sans-serif; letter-spacing: .24em; text-transform: uppercase;
+  }
+  /* 1: next deadline — pulsing red */
+  .ep.due-1 {
+    border-color: var(--dl-red);
+    animation: dl-pulse 1.8s ease-in-out infinite;
+  }
+  .ep.due-1 .dl-flag { color: var(--dl-red); animation: dl-blink 1.8s ease-in-out infinite; }
+  /* 2: second leg — orange */
+  .ep.due-2 { border-color: var(--due2); box-shadow: inset 4px 0 0 var(--due2); }
+  .ep.due-2 .dl-flag, .ep.due-3 .dl-flag {
+    font-size: 14px; letter-spacing: .14em; padding: 6px 10px; border-radius: 5px;
+  }
+  .ep.due-2 .dl-flag { background: var(--due2); color: #1f1c17; }
+  /* 3: third leg — yellow */
+  .ep.due-3 { border-color: var(--due3); box-shadow: inset 4px 0 0 var(--due3); }
+  .ep.due-3 .dl-flag { background: var(--due3); color: #1f1c17; }
+  @keyframes dl-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--dl-red) 55%, transparent); }
+    50%      { box-shadow: 0 0 0 6px color-mix(in srgb, var(--dl-red) 0%, transparent), 0 0 18px 2px color-mix(in srgb, var(--dl-red) 35%, transparent); }
+  }
+  @keyframes dl-blink { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
+  @media (prefers-reduced-motion: reduce) {
+    .ep.due-1, .ep.due-1 .dl-flag { animation: none; }
+    .ep.due-1 { box-shadow: 0 0 0 2px var(--dl-red); }
+  }
 
   .banner {
     margin-top: 16px; padding: 10px 14px; border-radius: 8px;
@@ -262,6 +322,7 @@
 </head>
 <body>
 <div class="wrap">
+  <section class="deadline" id="deadline" aria-live="polite"></section>
   <header class="top">
     <div class="eyebrow">Group watch · 89 episodes</div>
     <h1>Attack on Titan</h1>
@@ -294,6 +355,23 @@
    ========================================================= */
 const SUPABASE_URL = "https://rcqcmrrjmnqbklfqvbyn.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_rNkrNBTgMcMnsbEvXy0rOg_PnplMhBc";
+
+/* =========================================================
+   DEADLINES — edit these three legs.
+   episode: the episode everyone must reach, e.g. "S1E10"
+   date:    YYYY-MM-DD, due at the END of that day (midnight Pacific)
+   Leave an episode as "" to skip that leg.
+
+   NEXT   → countdown banner + pulsing red row
+   SECOND → orange row
+   THIRD  → yellow row
+   When a leg's date passes, the later legs move up on their own.
+   ========================================================= */
+const DUE = {
+  next:   { episode: "S1E10", date: "2026-10-25" },
+  second: { episode: "S1E15", date: "2026-11-01" },
+  third:  { episode: "S1E20", date: "2026-11-08" },
+};
 
 /* ---------- data ---------- */
 const VIEWERS = ["Nancy", "Skip", "Gavin", "BP"];
@@ -333,6 +411,7 @@ const SKIPS = {
 };
 
 const CREDITS_EPISODE = "S3E12";
+
 
 // Rank on IMDb's "TOP 100 Best Rated Episodes Of All Time" list (imdb.com/list/ls561057724)
 const TOP100 = {
@@ -554,7 +633,80 @@ document.addEventListener("change", async e => {
 });
 
 /* ---------- boot ---------- */
+/* ---------- deadline countdown ---------- */
+// Instant of midnight at the END of the given Pacific calendar day (DST-aware)
+function pacificEndOfDay(y, m, d) {
+  for (const off of [7, 8]) {                    // PDT = UTC-7, PST = UTC-8
+    const t = new Date(Date.UTC(y, m - 1, d + 1, off));
+    const h = new Intl.DateTimeFormat("en-US", { timeZone: "America/Los_Angeles", hour: "numeric", hourCycle: "h23" }).format(t);
+    if (Number(h) === 0) return t;
+  }
+  return new Date(Date.UTC(y, m - 1, d + 1, 8));
+}
+
+const fmtShort = dt => dt.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
+
+// Turn the DUE settings into dated legs, skipping blanks and typos
+const LEGS = [DUE.next, DUE.second, DUE.third].flatMap(leg => {
+  const c = (leg?.episode || "").trim().toUpperCase();
+  if (!c) return [];
+  const ep = ALL.find(x => x.code === c);
+  const parts = (leg.date || "").split("-").map(Number);
+  if (!ep || parts.length !== 3 || parts.some(isNaN)) { console.warn("Check this DUE leg:", leg); return []; }
+  const [y, m, d] = parts;
+  return [{ ep, due: pacificEndOfDay(y, m, d), day: new Date(Date.UTC(y, m - 1, d, 12)) }];
+}).sort((a, b) => a.due - b.due);
+
+const LEG_STYLE = [
+  { cls: "due-1", label: () => "Deadline" },
+  { cls: "due-2", label: leg => `2nd due · ${fmtShort(leg.day)}` },
+  { cls: "due-3", label: leg => `3rd due · ${fmtShort(leg.day)}` },
+];
+
+let flaggedKey = "";
+function flagRows(upcoming) {
+  const k = upcoming.map(l => l.ep.code).join(",");
+  if (k === flaggedKey) return;
+  document.querySelectorAll(".dl-flag").forEach(n => n.remove());
+  document.querySelectorAll(".ep.due-1, .ep.due-2, .ep.due-3").forEach(r => r.classList.remove("due-1", "due-2", "due-3"));
+  upcoming.slice(0, 3).forEach((leg, i) => {
+    const row = document.getElementById("ep-" + leg.ep.code);
+    if (!row) return;
+    row.classList.add(LEG_STYLE[i].cls);
+    row.querySelector(".info").insertAdjacentHTML("beforeend", `<span class="dl-flag">${LEG_STYLE[i].label(leg)}</span>`);
+  });
+  flaggedKey = k;
+}
+
+function tickDeadline() {
+  const el = document.getElementById("deadline");
+  const now = Date.now();
+  const upcoming = LEGS.filter(l => l.due.getTime() > now);
+  flagRows(upcoming);
+
+  if (!upcoming.length) {
+    el.className = "deadline plan";
+    el.innerHTML = `<div class="dl-target">Next deadline TBD</div>`;
+    return false;
+  }
+
+  const b = upcoming[0];
+  const left = Math.max(0, b.due.getTime() - now);
+  const D = Math.floor(left / 864e5), H = Math.floor(left / 36e5) % 24, M = Math.floor(left / 6e4) % 60, S = Math.floor(left / 1e3) % 60;
+  const ep = (b.ep.s > 1 ? `S${b.ep.s} ` : "") + `EP${b.ep.e}`;
+  const unit = (v, l) => `<div class="dl-unit"><div class="dl-num">${String(v).padStart(2, "0")}</div><div class="dl-lbl">${l}</div></div>`;
+
+  el.className = "deadline";
+  el.innerHTML = `
+    <div class="dl-target">${ep} due EOD ${fmtShort(b.day)}</div>
+    <div class="dl-clock" role="timer" aria-label="Time remaining">${unit(D, "Days")}${unit(H, "Hrs")}${unit(M, "Min")}${unit(S, "Sec")}</div>`;
+  return true;
+}
+
 render();
+if (tickDeadline()) {
+  const timer = setInterval(() => { if (!tickDeadline()) clearInterval(timer); }, 1000);
+}
 (async () => {
   if (!db) {
     document.getElementById("demoBanner").hidden = false;
